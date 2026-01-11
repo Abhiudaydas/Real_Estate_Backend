@@ -1,9 +1,22 @@
 import Property from "../models/property.model.js";
+import { uploadImage, deleteImage } from "../utils/image.service.js";
 
-/* CREATE PROPERTY */
+/* =========================
+   CREATE PROPERTY (WITH IMAGES)
+   ========================= */
 export const createProperty = async (req, res) => {
+  const images = [];
+
+  if (req.files && req.files.length > 0) {
+    for (const file of req.files) {
+      const uploaded = await uploadImage(file.buffer);
+      images.push(uploaded);
+    }
+  }
+
   const property = await Property.create({
     ...req.body,
+    images,
     owner: req.user._id,
   });
 
@@ -120,7 +133,6 @@ export const updateProperty = async (req, res) => {
   });
 };
 
-/* DELETE PROPERTY (SOFT) */
 export const deleteProperty = async (req, res) => {
   const property = await Property.findById(req.params.id);
 
@@ -133,6 +145,11 @@ export const deleteProperty = async (req, res) => {
     req.user.role !== "ADMIN"
   ) {
     return res.status(403).json({ message: "Access denied" });
+  }
+
+  /* 🔥 DELETE IMAGES FROM CLOUDINARY */
+  for (const img of property.images) {
+    await deleteImage(img.public_id);
   }
 
   property.isDeleted = true;
