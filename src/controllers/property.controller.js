@@ -2,12 +2,21 @@ import Property from "../models/property.model.js";
 import { uploadImage, deleteImage } from "../utils/image.service.js";
 
 /* =========================
-   CREATE PROPERTY (WITH IMAGES)
+   CREATE PROPERTY (WITH IMAGES + GEO)
    ========================= */
 export const createProperty = async (req, res) => {
+  const { title, description, price, type, category, latitude, longitude } =
+    req.body;
+
+  if (!latitude || !longitude) {
+    return res.status(400).json({
+      message: "Latitude and longitude are required",
+    });
+  }
+
   const images = [];
 
-  if (req.files && req.files.length > 0) {
+  if (req.files?.length) {
     for (const file of req.files) {
       const uploaded = await uploadImage(file.buffer);
       images.push(uploaded);
@@ -15,9 +24,22 @@ export const createProperty = async (req, res) => {
   }
 
   const property = await Property.create({
-    ...req.body,
+    title,
+    description,
+    price,
+    type,
+    category,
     images,
     owner: req.user._id,
+    location: {
+      address: req.body["location[address]"],
+      city: req.body["location[city]"],
+      state: req.body["location[state]"],
+      geo: {
+        type: "Point",
+        coordinates: [Number(longitude), Number(latitude)], // lng, lat
+      },
+    },
   });
 
   res.status(201).json({
@@ -26,7 +48,9 @@ export const createProperty = async (req, res) => {
   });
 };
 
-/* GET ALL PROPERTIES (PUBLIC) */
+/* =========================
+   GET ALL PROPERTIES (PUBLIC)
+   ========================= */
 export const getProperties = async (req, res) => {
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 10;
@@ -66,13 +90,13 @@ export const getProperties = async (req, res) => {
     properties,
   });
 };
+
 /* =========================
-   GET MY PROPERTIES (USER)
+   GET MY PROPERTIES
    ========================= */
 export const getMyProperties = async (req, res) => {
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 10;
-  const skip = (page - 1) * limit;
 
   const filter = {
     owner: req.user._id,
@@ -80,7 +104,7 @@ export const getMyProperties = async (req, res) => {
   };
 
   const properties = await Property.find(filter)
-    .skip(skip)
+    .skip((page - 1) * limit)
     .limit(limit)
     .sort({ createdAt: -1 });
 
@@ -94,7 +118,9 @@ export const getMyProperties = async (req, res) => {
   });
 };
 
-/* GET PROPERTY BY ID */
+/* =========================
+   GET PROPERTY BY ID
+   ========================= */
 export const getPropertyById = async (req, res) => {
   const property = await Property.findOne({
     _id: req.params.id,
@@ -109,7 +135,9 @@ export const getPropertyById = async (req, res) => {
   res.json(property);
 };
 
-/* UPDATE PROPERTY */
+/* =========================
+   UPDATE PROPERTY
+   ========================= */
 export const updateProperty = async (req, res) => {
   const property = await Property.findById(req.params.id);
 
@@ -124,7 +152,38 @@ export const updateProperty = async (req, res) => {
     return res.status(403).json({ message: "Access denied" });
   }
 
-  Object.assign(property, req.body);
+  /* Upload new images */
+  if (req.files?.length) {
+    for (const file of req.files) {
+      const uploaded = await uploadImage(file.buffer);
+      property.images.push(uploaded);
+    }
+  }
+
+  /* Update allowed fields only */
+  const allowedFields = [
+    "title",
+    "description",
+    "price",
+    "type",
+    "category",
+    "status",
+  ];
+
+  allowedFields.forEach((field) => {
+    if (req.body[field] !== undefined) {
+      property[field] = req.body[field];
+    }
+  });
+
+  /* Update geo */
+  if (req.body.latitude && req.body.longitude) {
+    property.location.geo.coordinates = [
+      Number(req.body.longitude),
+      Number(req.body.latitude),
+    ];
+  }
+
   await property.save();
 
   res.json({
@@ -133,6 +192,9 @@ export const updateProperty = async (req, res) => {
   });
 };
 
+/* =========================
+   DELETE PROPERTY
+   ========================= */
 export const deleteProperty = async (req, res) => {
   const property = await Property.findById(req.params.id);
 
@@ -147,7 +209,6 @@ export const deleteProperty = async (req, res) => {
     return res.status(403).json({ message: "Access denied" });
   }
 
-  /* 🔥 DELETE IMAGES FROM CLOUDINARY */
   for (const img of property.images) {
     await deleteImage(img.public_id);
   }
@@ -158,7 +219,9 @@ export const deleteProperty = async (req, res) => {
   res.json({ message: "Property deleted successfully" });
 };
 
-/* ADMIN: APPROVE / CHANGE STATUS */
+/* =========================
+   ADMIN: APPROVE / STATUS
+   ========================= */
 export const updatePropertyStatus = async (req, res) => {
   const { isApproved, status } = req.body;
 
@@ -181,5 +244,37 @@ export const updatePropertyStatus = async (req, res) => {
   res.json({
     message: "Property status updated",
     property,
+  });
+};
+
+/* =========================
+   GET NEARBY PROPERTIES
+   ========================= */
+export const getNearbyProperties = async (req, res) => {
+  const { lat, lng, radius = 5 } = req.query;
+
+  if (!lat || !lng) {
+    return res.status(400).json({
+      message: "Latitude and longitude are required",
+    });
+  }
+
+  const properties = await Property.find({
+    isDeleted: false,
+    isApproved: true,
+    "location.geo": {
+      $nearSphere: {
+        $geometry: {
+          type: "Point",
+          coordinates: [Number(lng), Number(lat)],
+        },
+        $maxDistance: Number(radius) * 1000,
+      },
+    },
+  }).populate("owner", "name email");
+
+  res.json({
+    count: properties.length,
+    properties,
   });
 };

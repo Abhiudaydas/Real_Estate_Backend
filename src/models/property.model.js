@@ -34,23 +34,32 @@ const propertySchema = new mongoose.Schema(
       address: String,
       city: String,
       state: String,
+
+      geo: {
+        type: {
+          type: String,
+          enum: ["Point"],
+          default: "Point",
+        },
+        coordinates: {
+          type: [Number], // [longitude, latitude]
+          required: true,
+        },
+      },
     },
 
-    images: {
-      type: [
-        {
-          public_id: {
-            type: String,
-            required: true,
-          },
-          url: {
-            type: String,
-            required: true,
-          },
+    images: [
+      {
+        public_id: {
+          type: String,
+          required: true,
         },
-      ],
-      default: [],
-    },
+        url: {
+          type: String,
+          required: true,
+        },
+      },
+    ],
 
     owner: {
       type: mongoose.Schema.Types.ObjectId,
@@ -64,6 +73,11 @@ const propertySchema = new mongoose.Schema(
       default: "available",
     },
 
+    isFeatured: {
+      type: Boolean,
+      default: false,
+    },
+
     isApproved: {
       type: Boolean,
       default: false,
@@ -74,9 +88,12 @@ const propertySchema = new mongoose.Schema(
       default: false,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
+
+/* =========================
+   GEO INDEX (CRITICAL)
+   ========================= */
+propertySchema.index({ "location.geo": "2dsphere" });
 
 export default mongoose.model("Property", propertySchema);
