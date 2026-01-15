@@ -100,6 +100,7 @@ const router = express.Router();
    ========================= */
 router.post(
   "/",
+
   upload.array("images", 5), // ✅ MUST BE HERE
   authenticate,
   createProperty

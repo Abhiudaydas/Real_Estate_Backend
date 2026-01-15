@@ -5,47 +5,59 @@ import { uploadImage, deleteImage } from "../utils/image.service.js";
    CREATE PROPERTY (WITH IMAGES + GEO)
    ========================= */
 export const createProperty = async (req, res) => {
-  const { title, description, price, type, category, latitude, longitude } =
-    req.body;
+  try {
+    console.log("========== CREATE PROPERTY ==========");
+    console.log("REQ.USER:", req.user);
+    console.log("REQ.BODY:", req.body);
+    console.log("REQ.FILES:", req.files);
 
-  if (!latitude || !longitude) {
-    return res.status(400).json({
-      message: "Latitude and longitude are required",
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized (no req.user)" });
+    }
+
+    const { title, description, price, type, category, latitude, longitude } =
+      req.body;
+
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+      return res.status(400).json({
+        message: "Invalid latitude or longitude",
+      });
+    }
+
+    const property = await Property.create({
+      title,
+      description,
+      price,
+      type,
+      category,
+      owner: req.user._id,
+      location: {
+        address: req.body["location[address]"] || "N/A",
+        city: req.body["location[city]"] || "N/A",
+        state: req.body["location[state]"] || "N/A",
+        geo: {
+          type: "Point",
+          coordinates: [Number(longitude), Number(latitude)],
+        },
+      },
+      images: [],
+    });
+
+    return res.status(201).json({
+      message: "Property created",
+      property,
+    });
+  } catch (err) {
+    console.error("🔥 CREATE PROPERTY CRASH 🔥");
+    console.error(err);
+    return res.status(500).json({
+      message: "Internal Server Error",
+      error: err.message,
     });
   }
-
-  const images = [];
-
-  if (req.files?.length) {
-    for (const file of req.files) {
-      const uploaded = await uploadImage(file.buffer);
-      images.push(uploaded);
-    }
-  }
-
-  const property = await Property.create({
-    title,
-    description,
-    price,
-    type,
-    category,
-    images,
-    owner: req.user._id,
-    location: {
-      address: req.body["location[address]"],
-      city: req.body["location[city]"],
-      state: req.body["location[state]"],
-      geo: {
-        type: "Point",
-        coordinates: [Number(longitude), Number(latitude)], // lng, lat
-      },
-    },
-  });
-
-  res.status(201).json({
-    message: "Property created successfully",
-    property,
-  });
 };
 
 /* =========================
