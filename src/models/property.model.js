@@ -80,7 +80,12 @@ const propertySchema = new mongoose.Schema(
 
     isApproved: {
       type: Boolean,
-      default: false,
+      default: null, // null = pending, true = approved, false = rejected
+    },
+
+    rejectionReason: {
+      type: String,
+      default: null,
     },
 
     isDeleted: {
@@ -88,7 +93,7 @@ const propertySchema = new mongoose.Schema(
       default: false,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 /* =========================

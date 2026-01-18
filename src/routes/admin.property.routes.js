@@ -5,23 +5,11 @@
  *   description: Admin-only APIs
  */
 
-/**
- * @swagger
- * /api/admin/properties:
- *   get:
- *     summary: Get all properties (admin)
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of all properties
- */
-
 import express from "express";
 import {
   getAllPropertiesAdmin,
   approveProperty,
+  rejectProperty,
   toggleFeaturedProperty,
   forceDeleteProperty,
 } from "../controllers/admin.property.controller.js";
@@ -32,33 +20,24 @@ const router = express.Router();
 
 /* =========================
    ADMIN PROPERTY CONTROLS
+   Apply auth middleware to all routes
    ========================= */
-router.get(
-  "/properties",
-  authenticate,
-  authorize("ADMIN"),
-  getAllPropertiesAdmin
-);
+router.use(authenticate);
+router.use(authorize("ADMIN"));
 
-router.patch(
-  "/properties/:id/approve",
-  authenticate,
-  authorize("ADMIN"),
-  approveProperty
-);
+// GET all properties (including pending/rejected)
+router.get("/properties", getAllPropertiesAdmin);
 
-router.patch(
-  "/properties/:id/feature",
-  authenticate,
-  authorize("ADMIN"),
-  toggleFeaturedProperty
-);
+// APPROVE property
+router.patch("/properties/:id/approve", approveProperty);
 
-router.delete(
-  "/properties/:id",
-  authenticate,
-  authorize("ADMIN"),
-  forceDeleteProperty
-);
+// REJECT property (with reason)
+router.patch("/properties/:id/reject", rejectProperty);
+
+// TOGGLE featured status
+router.patch("/properties/:id/feature", toggleFeaturedProperty);
+
+// DELETE property permanently (hard delete)
+router.delete("/properties/:id", forceDeleteProperty);
 
 export default router;

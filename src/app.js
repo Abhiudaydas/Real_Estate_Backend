@@ -1,76 +1,55 @@
 import express from "express";
+import cookieParser from "cookie-parser";
 import cors from "cors";
 import morgan from "morgan";
-import cookieParser from "cookie-parser";
 
-import healthRoutes from "./routes/health.routes.js";
-import authRoutes from "./routes/auth.routes.js";
-import adminRoutes from "./routes/admin.routes.js";
-import propertyRoutes from "./routes/property.routes.js";
-import enquiryRoutes from "./routes/enquiry.routes.js";
-import adminPropertyRoutes from "./routes/admin.property.routes.js";
-import swaggerUi from "swagger-ui-express";
-import { swaggerSpec } from "./config/swagger.js";
+const app = express();
 
-import {
-  apiLimiter,
-  securityMiddleware,
-} from "./middlewares/security.middleware.js";
+// CORS Configuration - MUST BE FIRST
+const corsOptions = {
+  origin: "http://localhost:5173",
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  exposedHeaders: ["set-cookie"],
+};
 
-import { corsOptions } from "./config/cors.js";
-import { globalErrorHandler } from "./middlewares/error.middleware.js";
+app.use(cors(corsOptions));
 
-export const app = express();
-
-/* =========================
-   CORE BODY PARSERS
-   ========================= */
+// Body parsing middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(morgan("dev"));
 
-/* =========================
-   SECURITY (GLOBAL)
-   ========================= */
-securityMiddleware.forEach((mw) => app.use(mw));
-app.use("/api", apiLimiter);
+// Import routes
+import authRoutes from "./routes/auth.routes.js";
+import propertyRoutes from "./routes/property.routes.js";
+import adminPropertyRoutes from "./routes/admin.property.routes.js";
+import enquiryRoutes from "./routes/enquiry.routes.js";
 
-/* =========================
-   CORS (SINGLE SOURCE OF TRUTH)
-   ========================= */
-app.use(cors(corsOptions));
-
-/* =========================
-   LOGGER
-   ========================= */
-if (process.env.NODE_ENV === "development") {
-  app.use(morgan("dev"));
-}
-/* API Docs */
-app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
-/* =========================
-   ROUTES
-   ========================= */
-app.use("/api/health", healthRoutes);
+// Mount routes
 app.use("/api/auth", authRoutes);
-
-app.use("/api/admin", adminRoutes);
-app.use("/api/admin", adminPropertyRoutes);
-
 app.use("/api/properties", propertyRoutes);
+app.use("/api/admin", adminPropertyRoutes);
 app.use("/api/enquiries", enquiryRoutes);
 
-/* =========================
-   404 HANDLER
-   ========================= */
+// Health check
+app.get("/api/health", (req, res) => {
+  res.json({ status: "OK", message: "Server is running" });
+});
+
+// 404 handler
 app.use((req, res) => {
-  res.status(404).json({
-    message: `Route ${req.method} ${req.originalUrl} not found`,
+  res.status(404).json({ message: "Route not found" });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error("Error:", err);
+  res.status(err.status || 500).json({
+    message: err.message || "Internal Server Error",
   });
 });
 
-/* =========================
-   GLOBAL ERROR HANDLER (LAST)
-   ========================= */
-app.use(globalErrorHandler);
+export default app;
